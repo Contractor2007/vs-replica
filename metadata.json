@@ -1,0 +1,6 @@
+{
+  "name": "SaaS Forge",
+  "description": "A high-fidelity VS Code Web IDE Simulator featuring real-time file tree navigation, multi-tabs editing with syntax highlighting, an interactive terminal runner, and a custom Gemini-powered Copilot Chat assistant.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
