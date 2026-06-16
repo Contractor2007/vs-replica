@@ -14,7 +14,7 @@ app.use(express.json({ limit: "50mb" }));
 
 // Initialize Gemini Client
 const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
+  apiKey : "AQ.Ab8RN6Lk14Vb86HQDi4XrWpNvY3rZJq13MiiPoO6i0mALVbqrw",
   httpOptions: {
     headers: {
       'User-Agent': 'aistudio-build',
