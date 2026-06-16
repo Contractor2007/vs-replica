@@ -4,6 +4,7 @@ import { TitleBar } from "./components/TitleBar";
 import { ActivityBar } from "./components/ActivityBar";
 import { LeftSidebar } from "./components/LeftSidebar";
 import { EditorArea } from "./components/EditorArea";
+import { RightSidebar } from "./components/RightSidebar";
 import { StatusBar } from "./components/StatusBar";
 import { CommandPalette } from "./components/CommandPalette";
 import { ContextMenu } from "./components/ContextMenu";
@@ -96,6 +97,9 @@ export default function App() {
           {/* Main workspace, breadcrumbs, lines, code, minimap */}
           <EditorArea />
         </div>
+
+        {/* Right side AI chat companion panel */}
+        <RightSidebar />
       </div>
 
       {/* 3. Status strip line */}

@@ -8,6 +8,7 @@ import {
   GitStatusItem, 
   EditorSettings 
 } from "../types";
+import { supabase, HAS_REAL_SUPABASE, sandbox } from "./supabaseClient";
 
 // Seed data: High-fidelity Dart/Flutter files described in the user request
 const initialFiles: VSCodeFile[] = [];
@@ -388,8 +389,8 @@ interface VSCodeStore {
   lastClosedTabs: string[];
   
   // Layout Management State
-  activeSidebarTab: "explorer" | "search" | "git" | "extensions" | "ai" | null;
-  prevActiveSidebarTab: "explorer" | "search" | "git" | "extensions" | "ai";
+  activeSidebarTab: "explorer" | "search" | "git" | "extensions" | "ai" | "supabase" | null;
+  prevActiveSidebarTab: "explorer" | "search" | "git" | "extensions" | "ai" | "supabase";
   leftSidebarWidth: number;
   sidebarCollapsed: boolean;
   bottomPanelHeight: number;
@@ -432,7 +433,7 @@ interface VSCodeStore {
 
   // Global Actions
   toggleSidebar: () => void;
-  setSidebarTab: (tab: "explorer" | "search" | "git" | "extensions" | "ai" | null) => void;
+  setSidebarTab: (tab: "explorer" | "search" | "git" | "extensions" | "ai" | "supabase" | null) => void;
   setLeftSidebarWidth: (w: number) => void;
   setBottomPanelHeight: (h: number) => void;
   setBottomPanelCollapsed: (b: boolean) => void;
@@ -451,6 +452,7 @@ interface VSCodeStore {
   createNewFolder: (parentPath: string | null, name: string) => void;
   renamePath: (oldPath: string, newName: string) => void;
   deletePath: (path: string) => void;
+  loadProjectFiles: (files: VSCodeFile[]) => void;
 
   // Search Engine
   setSearchQuery: (query: string) => void;
@@ -490,6 +492,20 @@ interface VSCodeStore {
 
   // Settings Toggles
   updateSettings: (update: Partial<EditorSettings>) => void;
+
+  // Supabase State & Sync
+  activeProjectId: string | null;
+  activeProjectName: string | null;
+  setActiveProject: (id: string | null, name: string | null) => void;
+  syncProjectFilesToSupabase: () => Promise<void>;
+  syncChatMessagesToSupabase: () => Promise<void>;
+  loadSupabaseChatMessages: (projectId: string) => Promise<void>;
+
+  // Right Sidebar (RHS) layout for AI Chat
+  rightSidebarWidth: number;
+  rightSidebarCollapsed: boolean;
+  setRightSidebarWidth: (w: number) => void;
+  setRightSidebarCollapsed: (b: boolean) => void;
 }
 
 export const useVSCodeStore = create<VSCodeStore>((set, get) => {
@@ -641,6 +657,11 @@ I will immediately scaffold a multi-file architecture containing interactive Dar
       theme: "elegant-dark"
     },
 
+    activeProjectId: null,
+    activeProjectName: null,
+    rightSidebarWidth: 320,
+    rightSidebarCollapsed: false,
+
     // Global Actions
     toggleSidebar: () => {
       set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed }));
@@ -682,6 +703,168 @@ I will immediately scaffold a multi-file architecture containing interactive Dar
     setBottomTab: (tab) => set({ activeBottomTab: tab, bottomPanelCollapsed: false }),
 
     setCursorPos: (line, col) => set({ cursorLine: line, cursorColumn: col }),
+
+    setRightSidebarWidth: (w) => {
+      if (w < 155) {
+        set({ rightSidebarCollapsed: true });
+      } else {
+        set({ rightSidebarWidth: Math.min(Math.max(w, 200), 750), rightSidebarCollapsed: false });
+      }
+    },
+
+    setRightSidebarCollapsed: (b) => {
+      set({ rightSidebarCollapsed: b });
+    },
+
+    setActiveProject: (id, name) => {
+      set({ activeProjectId: id, activeProjectName: name });
+    },
+
+    syncProjectFilesToSupabase: async () => {
+      const { activeProjectId, files } = get();
+      if (!activeProjectId) return;
+
+      console.log(`[Supabase sync] Auto-saving files for project: ${activeProjectId}...`);
+      try {
+        if (HAS_REAL_SUPABASE && supabase) {
+          const { error } = await supabase
+            .from("projects")
+            .update({ files: files, updated_at: new Date().toISOString() })
+            .eq("id", activeProjectId);
+          if (error) console.error("[Supabase sync] Files update error:", error);
+        } else {
+          // Sync locally to Sandbox LocalStorage
+          const allList = localStorage.getItem("saas_forge_sandbox_projects");
+          if (allList) {
+            let allProjects = JSON.parse(allList);
+            const idx = allProjects.findIndex((p: any) => p.id === activeProjectId);
+            if (idx !== -1) {
+              allProjects[idx].files = files;
+              allProjects[idx].updated_at = new Date().toISOString();
+              localStorage.setItem("saas_forge_sandbox_projects", JSON.stringify(allProjects));
+            }
+          }
+        }
+      } catch (err) {
+        console.error("[Supabase sync] Files update failure:", err);
+      }
+    },
+
+    syncChatMessagesToSupabase: async () => {
+      const { activeProjectId, chatMessages } = get();
+      if (!activeProjectId) return;
+
+      console.log(`[Supabase sync] Auto-saving chats for project: ${activeProjectId}...`);
+      try {
+        if (HAS_REAL_SUPABASE && supabase) {
+          // Check if chat row already exists
+          const { data, error: selectError } = await supabase
+            .from("chats")
+            .select("id")
+            .eq("project_id", activeProjectId)
+            .maybeSingle();
+
+          if (data?.id) {
+            // Update existing message logs
+            const { error: updateError } = await supabase
+              .from("chats")
+              .update({
+                messages: chatMessages,
+                updated_at: new Date().toISOString()
+              })
+              .eq("id", data.id);
+            if (updateError) console.error("[Supabase sync] Chats update failure:", updateError);
+          } else {
+            // Get current active user row
+            const { data: { session } } = await supabase.auth.getSession();
+            const user_id = session?.user?.id || null;
+            if (user_id) {
+              const { error: insertError } = await supabase
+                .from("chats")
+                .insert([{
+                  project_id: activeProjectId,
+                  user_id: user_id,
+                  messages: chatMessages
+                }]);
+              if (insertError) console.error("[Supabase sync] Chats setup failure:", insertError);
+            }
+          }
+        } else {
+          // Sandbox LocalStorage fallback mode
+          const key = "saas_forge_sandbox_chats";
+          const allChatsText = localStorage.getItem(key);
+          let allChats = allChatsText ? JSON.parse(allChatsText) : [];
+          const idx = allChats.findIndex((c: any) => c.project_id === activeProjectId);
+          const now = new Date().toISOString();
+          
+          if (idx !== -1) {
+            allChats[idx].messages = chatMessages;
+            allChats[idx].updated_at = now;
+          } else {
+            allChats.push({
+              id: Math.random().toString(36).substring(7),
+              project_id: activeProjectId,
+              user_id: "sandbox_developer",
+              messages: chatMessages,
+              created_at: now,
+              updated_at: now
+            });
+          }
+          localStorage.setItem(key, JSON.stringify(allChats));
+        }
+      } catch (err) {
+        console.error("[Supabase sync] Chats sync failure:", err);
+      }
+    },
+
+    loadSupabaseChatMessages: async (projectId) => {
+      try {
+        if (HAS_REAL_SUPABASE && supabase) {
+          const { data, error } = await supabase
+            .from("chats")
+            .select("messages")
+            .eq("project_id", projectId)
+            .maybeSingle();
+
+          if (data?.messages) {
+            set({ chatMessages: data.messages });
+          } else {
+            // Setup welcoming copilot conversation template
+            set({
+              chatMessages: [
+                {
+                  id: "welcome",
+                  role: "assistant",
+                  content: `👋 Welcome back! Code is loaded. Ask me your questions relative to this project!`,
+                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                }
+              ]
+            });
+          }
+        } else {
+          // Local storage Sandbox mode loading
+          const allChatsText = localStorage.getItem("saas_forge_sandbox_chats");
+          let allChats = allChatsText ? JSON.parse(allChatsText) : [];
+          const chatRow = allChats.find((c: any) => c.project_id === projectId);
+          if (chatRow?.messages) {
+            set({ chatMessages: chatRow.messages });
+          } else {
+            set({
+              chatMessages: [
+                {
+                  id: "welcome",
+                  role: "assistant",
+                  content: `👋 Welcome back! (Sandbox Offline Fallback mode). Copilot is ready!`,
+                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                }
+              ]
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("[Supabase chat loader] Chats restore issue:", err);
+      }
+    },
 
     // Files navigation
     expandFolder: (path, expand) => {
@@ -782,6 +965,12 @@ I will immediately scaffold a multi-file architecture containing interactive Dar
         };
       });
 
+      // Quick Real-time debounced sync with Supabase / Sandbox
+      if ((window as any)._supabaseSyncTimer) clearTimeout((window as any)._supabaseSyncTimer);
+      (window as any)._supabaseSyncTimer = setTimeout(() => {
+        get().syncProjectFilesToSupabase();
+      }, 1000);
+
       // Handle autosave delay
       if (settings.autoSave === "delay") {
         if ((window as any)._autosaveTimer) clearTimeout((window as any)._autosaveTimer);
@@ -850,6 +1039,7 @@ I will immediately scaffold a multi-file architecture containing interactive Dar
 
       // Set focus to the new file
       get().openFileInTab(fullPath);
+      get().syncProjectFilesToSupabase();
     },
 
     createNewFolder: (parentPath, name) => {
@@ -872,6 +1062,7 @@ I will immediately scaffold a multi-file architecture containing interactive Dar
           ]
         };
       });
+      get().syncProjectFilesToSupabase();
     },
 
     renamePath: (oldPath, newName) => {
@@ -943,6 +1134,7 @@ I will immediately scaffold a multi-file architecture containing interactive Dar
           ]
         };
       });
+      get().syncProjectFilesToSupabase();
     },
 
     deletePath: (path) => {
@@ -969,6 +1161,30 @@ I will immediately scaffold a multi-file architecture containing interactive Dar
           ]
         };
       });
+      get().syncProjectFilesToSupabase();
+    },
+
+    loadProjectFiles: (files) => {
+      const findFirstFile = (nodes: any[]): string | null => {
+        for (const node of nodes) {
+          if (node.type === "file") return node.path;
+          if (node.type === "folder" && node.children) {
+            const path = findFirstFile(node.children);
+            if (path) return path;
+          }
+        }
+        return null;
+      };
+      const firstActiveFile = findFirstFile(files);
+      set((state) => ({
+        files,
+        openTabs: firstActiveFile ? [{ path: firstActiveFile, isDirty: false }] : [],
+        activeFilePath: firstActiveFile,
+        terminalBuffer: [
+          ...state.terminalBuffer,
+          { text: `🚀 Project loaded into virtual workspace!`, type: "success" as const }
+        ]
+      }));
     },
 
     // Search Engine
@@ -1168,6 +1384,7 @@ I will immediately scaffold a multi-file architecture containing interactive Dar
         chatMessages: [...state.chatMessages, userMsg],
         chatTyping: true
       }));
+      await get().syncChatMessagesToSupabase();
 
       try {
         const res = await fetch("/api/gemini/chat", {
@@ -1237,6 +1454,7 @@ I will immediately scaffold a multi-file architecture containing interactive Dar
           chatMessages: [...state.chatMessages, assistantMsg],
           chatTyping: false
         }));
+        await get().syncChatMessagesToSupabase();
 
         // 3. Process writes with beautiful, fast typing/streaming effects sequentially
         if (writes.length > 0) {
@@ -1323,6 +1541,7 @@ I will immediately scaffold a multi-file architecture containing interactive Dar
                   { text: `✓ Generated file "${path}" successfully!`, type: "success" as const }
                 ]
               }));
+              get().syncProjectFilesToSupabase();
 
               await new Promise((r) => setTimeout(r, 100));
             }
@@ -1342,11 +1561,13 @@ Your workspace GEMINI_API_KEY could be unconfigured or expired. Ensure secrets a
           chatMessages: [...state.chatMessages, errorMsg],
           chatTyping: false
         }));
+        await get().syncChatMessagesToSupabase();
       }
     },
 
     clearChat: () => {
       set({ chatMessages: [] });
+      get().syncChatMessagesToSupabase();
     },
 
     // Command Palette

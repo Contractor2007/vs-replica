@@ -18,7 +18,9 @@ export function ActivityBar() {
     setSidebarTab, 
     gitModifiedFiles, 
     chatMessages,
-    sidebarCollapsed 
+    sidebarCollapsed,
+    rightSidebarCollapsed,
+    setRightSidebarCollapsed
   } = useVSCodeStore();
 
   const primaryItems = [
@@ -48,12 +50,23 @@ export function ActivityBar() {
       <div className="flex flex-col gap-1 w-full items-center">
         {primaryItems.map((item) => {
           const Icon = item.icon;
-          const isActive = activeSidebarTab === item.id && !sidebarCollapsed;
+          const isAI = item.id === "ai";
+          const isActive = isAI 
+            ? !rightSidebarCollapsed 
+            : activeSidebarTab === item.id && !sidebarCollapsed;
+
+          const handleTabClick = () => {
+            if (isAI) {
+              setRightSidebarCollapsed(!rightSidebarCollapsed);
+            } else {
+              setSidebarTab(item.id);
+            }
+          };
 
           return (
             <button
               key={item.id}
-              onClick={() => setSidebarTab(item.id)}
+              onClick={handleTabClick}
               title={item.label}
               className={`h-11 w-full flex items-center justify-center relative group transition-colors duration-150 ${
                 isActive ? "text-blue-400" : "text-slate-500 hover:text-slate-200"
@@ -85,12 +98,18 @@ export function ActivityBar() {
       {/* Bottom control tabs */}
       <div className="flex flex-col gap-1 w-full items-center">
         <button 
-          title="Account profile"
-          className="h-11 w-full flex items-center justify-center text-slate-500 hover:text-slate-200 group transition relative"
+          onClick={() => setSidebarTab("supabase")}
+          title="Account profile & Saved Projects"
+          className={`h-11 w-full flex items-center justify-center transition relative group ${
+            activeSidebarTab === "supabase" && !sidebarCollapsed ? "text-blue-400" : "text-slate-500 hover:text-slate-200"
+          }`}
         >
+          {activeSidebarTab === "supabase" && !sidebarCollapsed && (
+            <div className="absolute left-0 top-1/4 bottom-1/4 w-[2.5px] bg-blue-500 rounded-r-sm" />
+          )}
           <UserRound className="w-4.5 h-4.5" />
           <div className="absolute left-full ml-1 px-2 py-1 bg-slate-900 border border-slate-800 text-slate-100 text-[10px] font-sans rounded opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap shadow-xl">
-            SaaS User (Gidion)
+            SaaS Account & Database
           </div>
         </button>
 

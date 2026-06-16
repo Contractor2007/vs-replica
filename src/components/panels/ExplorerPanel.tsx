@@ -7,6 +7,7 @@ import {
   File, 
   Plus, 
   FolderPlus, 
+  FolderMinus,
   Trash2, 
   Edit3, 
   ChevronRight, 
@@ -161,18 +162,33 @@ export function ExplorerPanel() {
                 >
                   <Edit3 className="w-3 h-3" />
                 </button>
-                <button
-                  title="Delete"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (confirm(`Delete ${node.name} permanently?`)) {
-                      deletePath(node.path);
-                    }
-                  }}
-                  className="p-0.5 hover:bg-red-900/40 text-slate-400 hover:text-red-400 rounded"
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
+                {isFolder ? (
+                  <button
+                    title="Remove Folder from Workspace"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (confirm(`Are you sure you want to remove folder "${node.name}" from the active workspace?`)) {
+                        deletePath(node.path);
+                      }
+                    }}
+                    className="p-0.5 hover:bg-amber-900/40 text-slate-400 hover:text-amber-400 rounded"
+                  >
+                    <FolderMinus className="w-3 h-3" />
+                  </button>
+                ) : (
+                  <button
+                    title="Delete File"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (confirm(`Delete file "${node.name}" permanently?`)) {
+                        deletePath(node.path);
+                      }
+                    }}
+                    className="p-0.5 hover:bg-red-900/40 text-slate-400 hover:text-red-400 rounded"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                )}
               </div>
             </div>
           )}
