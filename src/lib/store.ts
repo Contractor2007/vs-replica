@@ -10,8 +10,146 @@ import {
 } from "../types";
 import { supabase, HAS_REAL_SUPABASE, sandbox } from "./supabaseClient";
 
+export const flutterTemplateFiles: VSCodeFile[] = [
+  {
+    name: "lib",
+    path: "lib",
+    type: "folder",
+    isExpanded: true,
+    children: [
+      {
+        name: "main.dart",
+        path: "lib/main.dart",
+        type: "file",
+        content: `import 'package:flutter/material.dart';
+
+void main() {
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Flutter Default App',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        useMaterial3: true,
+      ),
+      home: const MyHomePage(title: 'Flutter Counter Home'),
+    );
+  }
+}
+
+class MyHomePage extends StatefulWidget {
+  const MyHomePage({super.key, required this.title});
+
+  final String title;
+
+  @override
+  State<MyHomePage> createState() => _MyHomePageState();
+}
+
+class _MyHomePageState extends State<MyHomePage> {
+  int _counter = 0;
+
+  void _incrementCounter() {
+    setState(() {
+      _counter++;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        title: Text(widget.title),
+      ),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            const Text(
+              'You have pushed the button this many times:',
+            ),
+            Text(
+              '$_counter',
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+          ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _incrementCounter,
+        tooltip: 'Increment',
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+}`
+      }
+    ]
+  },
+  {
+    name: "pubspec.yaml",
+    path: "pubspec.yaml",
+    type: "file",
+    content: `name: flutter_default_app
+description: "A new Flutter project."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true`
+  },
+  {
+    name: "analysis_options.yaml",
+    path: "analysis_options.yaml",
+    type: "file",
+    content: `include: package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    avoid_print: false
+    prefer_const_constructors: true
+    prefer_const_literals_to_create_immutables: true`
+  },
+  {
+    name: "README.md",
+    path: "README.md",
+    type: "file",
+    content: `# Flutter Default Counter Application
+
+A brand new Flutter project containing the standard interactive counting application.
+
+## Getting Started
+
+To run this application:
+1. Install Flutter on your system: https://docs.flutter.dev/get-started/install
+2. Open terminal in the project directory
+3. Run \`flutter run\` in the console.`
+  }
+];
+
 // Seed data: High-fidelity Dart/Flutter files described in the user request
-const initialFiles: VSCodeFile[] = [];
+const initialFiles: VSCodeFile[] = flutterTemplateFiles;
 
 // Helper to recursively insert or update files/folders in nested tree
 const upsertFileInTree = (nodes: VSCodeFile[], filePath: string, content: string): VSCodeFile[] => {
@@ -389,8 +527,8 @@ interface VSCodeStore {
   lastClosedTabs: string[];
   
   // Layout Management State
-  activeSidebarTab: "explorer" | "search" | "git" | "extensions" | "ai" | "supabase" | null;
-  prevActiveSidebarTab: "explorer" | "search" | "git" | "extensions" | "ai" | "supabase";
+  activeSidebarTab: "explorer" | "search" | "extensions" | "ai" | "account" | "database" | null;
+  prevActiveSidebarTab: "explorer" | "search" | "extensions" | "ai" | "account" | "database";
   leftSidebarWidth: number;
   sidebarCollapsed: boolean;
   bottomPanelHeight: number;
@@ -433,7 +571,7 @@ interface VSCodeStore {
 
   // Global Actions
   toggleSidebar: () => void;
-  setSidebarTab: (tab: "explorer" | "search" | "git" | "extensions" | "ai" | "supabase" | null) => void;
+  setSidebarTab: (tab: "explorer" | "search" | "extensions" | "ai" | "account" | "database" | null) => void;
   setLeftSidebarWidth: (w: number) => void;
   setBottomPanelHeight: (h: number) => void;
   setBottomPanelCollapsed: (b: boolean) => void;
@@ -500,6 +638,10 @@ interface VSCodeStore {
   syncProjectFilesToSupabase: () => Promise<void>;
   syncChatMessagesToSupabase: () => Promise<void>;
   loadSupabaseChatMessages: (projectId: string) => Promise<void>;
+  user: { id: string; email: string } | null;
+  setUser: (user: { id: string; email: string } | null) => void;
+  projects: any[];
+  setProjects: (projects: any[]) => void;
 
   // Right Sidebar (RHS) layout for AI Chat
   rightSidebarWidth: number;
@@ -590,8 +732,8 @@ export const useVSCodeStore = create<VSCodeStore>((set, get) => {
 
   return {
     files: initialFiles,
-    openTabs: [],
-    activeFilePath: null,
+    openTabs: [{ path: "lib/main.dart", isDirty: false }, { path: "pubspec.yaml", isDirty: false }],
+    activeFilePath: "lib/main.dart",
     lastClosedTabs: [],
 
     activeSidebarTab: "explorer",
@@ -659,6 +801,10 @@ I will immediately scaffold a multi-file architecture containing interactive Dar
 
     activeProjectId: null,
     activeProjectName: null,
+    user: null,
+    projects: [],
+    setUser: (user) => set({ user }),
+    setProjects: (projects) => set({ projects }),
     rightSidebarWidth: 320,
     rightSidebarCollapsed: false,
 
@@ -1398,7 +1544,16 @@ I will immediately scaffold a multi-file architecture containing interactive Dar
         });
 
         if (!res.ok) {
-          throw new Error("Failed to communicate with LLM AI server");
+          let errorMsg = "Failed to communicate with LLM AI server";
+          try {
+            const errData = await res.json();
+            if (errData && errData.error) {
+              errorMsg = errData.error;
+            }
+          } catch (e) {
+            // fallback
+          }
+          throw new Error(errorMsg);
         }
 
         const data = await res.json();
@@ -1600,8 +1755,11 @@ Your workspace GEMINI_API_KEY could be unconfigured or expired. Ensure secrets a
         case "search":
           setSidebarTab("search");
           break;
-        case "git":
-          setSidebarTab("git");
+        case "database":
+          setSidebarTab("database");
+          break;
+        case "account":
+          setSidebarTab("account");
           break;
         case "extensions":
           setSidebarTab("extensions");

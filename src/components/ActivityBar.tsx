@@ -3,35 +3,29 @@ import { useVSCodeStore } from "../lib/store";
 import { 
   Folder, 
   Search, 
-  GitFork, 
+  Database,
   Play, 
   Puzzle, 
   Bot, 
   Settings, 
-  UserRound,
-  Info
+  UserRound
 } from "lucide-react";
 
 export function ActivityBar() {
   const { 
     activeSidebarTab, 
     setSidebarTab, 
-    gitModifiedFiles, 
     chatMessages,
     sidebarCollapsed,
     rightSidebarCollapsed,
-    setRightSidebarCollapsed
+    setRightSidebarCollapsed,
+    projects
   } = useVSCodeStore();
 
   const primaryItems = [
     { id: "explorer" as const, icon: Folder, label: "Explorer", badge: 0 },
     { id: "search" as const, icon: Search, label: "Search", badge: 0 },
-    { 
-      id: "git" as const, 
-      icon: GitFork, 
-      label: "Source Control", 
-      badge: gitModifiedFiles.length 
-    },
+    { id: "database" as const, icon: Database, label: "Database Projects", badge: projects.length },
     { id: "extensions" as const, icon: Puzzle, label: "Extensions", badge: 0 },
     { 
       id: "ai" as const, 
@@ -98,18 +92,18 @@ export function ActivityBar() {
       {/* Bottom control tabs */}
       <div className="flex flex-col gap-1 w-full items-center">
         <button 
-          onClick={() => setSidebarTab("supabase")}
-          title="Account profile & Saved Projects"
+          onClick={() => setSidebarTab("account")}
+          title="Account profile"
           className={`h-11 w-full flex items-center justify-center transition relative group ${
-            activeSidebarTab === "supabase" && !sidebarCollapsed ? "text-blue-400" : "text-slate-500 hover:text-slate-200"
+            activeSidebarTab === "account" && !sidebarCollapsed ? "text-blue-400" : "text-slate-500 hover:text-slate-200"
           }`}
         >
-          {activeSidebarTab === "supabase" && !sidebarCollapsed && (
+          {activeSidebarTab === "account" && !sidebarCollapsed && (
             <div className="absolute left-0 top-1/4 bottom-1/4 w-[2.5px] bg-blue-500 rounded-r-sm" />
           )}
           <UserRound className="w-4.5 h-4.5" />
           <div className="absolute left-full ml-1 px-2 py-1 bg-slate-900 border border-slate-800 text-slate-100 text-[10px] font-sans rounded opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap shadow-xl">
-            SaaS Account & Database
+            Developer Account
           </div>
         </button>
 

@@ -6,7 +6,8 @@ import { GitPanel } from "./panels/GitPanel";
 import { ExtensionsPanel } from "./panels/ExtensionsPanel";
 import { Bot, LogIn } from "lucide-react";
 import { AIChatPanel } from "./AIChatPanel";
-import { SupabasePanel } from "./panels/SupabasePanel";
+import { AccountPanel } from "./panels/AccountPanel";
+import { DatabasePanel } from "./panels/DatabasePanel";
 
 export function LeftSidebar() {
   const { 
@@ -53,9 +54,9 @@ export function LeftSidebar() {
       <div className="flex-1 h-full min-h-0 flex flex-col overflow-hidden">
         {activeSidebarTab === "explorer" && <ExplorerPanel />}
         {activeSidebarTab === "search" && <SearchPanel />}
-        {activeSidebarTab === "git" && <GitPanel />}
         {activeSidebarTab === "extensions" && <ExtensionsPanel />}
-        {activeSidebarTab === "supabase" && <SupabasePanel />}
+        {activeSidebarTab === "account" && <AccountPanel />}
+        {activeSidebarTab === "database" && <DatabasePanel />}
       </div>
 
       {/* resizable drag trigger divider */}

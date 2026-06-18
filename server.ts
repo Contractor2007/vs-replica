@@ -12,15 +12,43 @@ const PORT = 3000;
 // Enable JSON bodies with higher limit for code transport
 app.use(express.json({ limit: "50mb" }));
 
-// Initialize Gemini Client
-const ai = new GoogleGenAI({
-  apiKey : "AQ.Ab8RN6Lk14Vb86HQDi4XrWpNvY3rZJq13MiiPoO6i0mALVbqrw",
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
+// Initialize Gemini Client Lazily with Dynamic Updates
+let aiInstance: GoogleGenAI | null = null;
+let lastApiKeyUsed: string | undefined = undefined;
+
+function isApiKeyConfigured(key?: string): boolean {
+  if (!key) return false;
+  const normalized = key.trim().toUpperCase();
+  if (normalized === "" || 
+      normalized === "MY_GEMINI_API_KEY" || 
+      normalized === "YOUR_GEMINI_API_KEY_HERE" || 
+      normalized.includes("YOUR_GEMINI_API_KEY") || 
+      normalized.includes("YOUR_API_KEY") ||
+      normalized.includes("PLACEHOLDER")
+  ) {
+    return false;
   }
-});
+  return true;
+}
+
+function getAIClient(): GoogleGenAI {
+  const key = process.env.GEMINI_API_KEY;
+  if (!isApiKeyConfigured(key)) {
+    throw new Error("Gemini API key is not configured. Please open Settings > Secrets to add GEMINI_API_KEY.");
+  }
+  if (!aiInstance || lastApiKeyUsed !== key) {
+    aiInstance = new GoogleGenAI({
+      apiKey: key,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
+    lastApiKeyUsed = key;
+  }
+  return aiInstance;
+}
 
 // Helper to call generateContent with retry on transient errors (429/503) and fallback models
 async function generateContentWithRetry(params: {
@@ -29,7 +57,7 @@ async function generateContentWithRetry(params: {
   config?: any;
 }, retriesLeft = 3, delayMs = 1200): Promise<any> {
   const modelsToTry = [
-    params.model || "gemini-3.5-flash",
+    params.model || "gemini-2.5-flash",
     "gemini-flash-latest",
     "gemini-3.1-flash-lite"
   ];
@@ -43,13 +71,19 @@ async function generateContentWithRetry(params: {
     while (attempts < maxAttemptsForModel) {
       try {
         console.log(`[Gemini client] Querying model: ${modelToTry} (Attempt ${attempts + 1}/${maxAttemptsForModel})`);
-        const response = await ai.models.generateContent({
+        const response = await getAIClient().models.generateContent({
           model: modelToTry,
           contents: params.contents,
           config: params.config,
         });
         return response;
       } catch (err: any) {
+        const errMsg = err.message || "";
+        if (errMsg.includes("API Key not found") || errMsg.includes("valid API key") || errMsg.includes("API_KEY_INVALID") || err.status === 400) {
+          lastError = new Error("The configured Gemini API Key is invalid or not recognized by Google. Please open Settings > Secrets to configure a valid API Key.");
+          break;
+        }
+
         lastError = err;
         const statusCode = err.status || (err.message && err.message.includes("503") ? 503 : null);
         console.warn(`[Gemini client] Error with model ${modelToTry}:`, err.message || err);
@@ -76,9 +110,9 @@ async function generateContentWithRetry(params: {
 
 // API Helper to get Gemini Key and respond gracefully if missing
 function checkApiKey(res: express.Response): boolean {
-  if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === "MY_GEMINI_API_KEY" || process.env.GEMINI_API_KEY === "") {
+  if (!isApiKeyConfigured(process.env.GEMINI_API_KEY)) {
     res.status(500).json({
-      error: "Gemini API key is not configured. Please open Secrets under Settings to add GEMINI_API_KEY."
+      error: "Gemini API key is not configured. Please open Settings > Secrets to add GEMINI_API_KEY."
     });
     return false;
   }
@@ -99,7 +133,7 @@ app.post("/api/suggest-wizard", async (req, res) => {
 You must output valid, schema-conforming JSON containing the ideal tech stack, feature checklist, monetization strategy with customized tiers, and dynamic user security roles.`;
 
     const response = await generateContentWithRetry({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.5-flash",
       contents: `Propose wizard options for the SaaS idea: "${idea}"`,
       config: {
         systemInstruction: systemPrompt,
@@ -212,7 +246,7 @@ CRITICAL RULES:
 ${JSON.stringify(config, null, 2)}`;
 
     const response = await generateContentWithRetry({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.5-flash",
       contents: requestPrompt,
       config: {
         systemInstruction: systemPrompt,
@@ -288,7 +322,7 @@ RULES:
     }));
 
     const response = await generateContentWithRetry({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.5-flash",
       contents: contents,
       config: {
         systemInstruction: systemPrompt,
